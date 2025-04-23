@@ -379,6 +379,85 @@ const handleSFTPConnection = (socket, connectionDetails) => {
   sshClient.connect(connectConfig)
 }
 
+// Add this function to the daemon code, after the handleSFTPConnection function
+
+// Handle opening files in system editor
+const handleOpenInSystemEditor = (socket, { path, host, username }) => {
+  if (!socket.data.address) {
+    socket.emit("editor:error", { message: "Authentication required" })
+    return
+  }
+
+  log("info", `Request to open file in system editor: ${path} on ${host} as ${username}`)
+
+  // This implementation depends on the operating system
+  // For Linux/macOS, we can use xdg-open or open
+  // For Windows, we can use start
+  const isWindows = process.platform === 'win32'
+  const isMac = process.platform === 'darwin'
+  
+  // Determine the command to use based on the OS
+  let command
+  if (isWindows) {
+    command = 'start'
+  } else if (isMac) {
+    command = 'open'
+  } else {
+    command = 'xdg-open'
+  }
+
+  // For security reasons, we need to establish an SSH connection first
+  // and then use that to execute the command
+  const sshClient = new ssh2.Client()
+
+  sshClient.on('ready', () => {
+    log("info", `SSH connection established to ${host} for system editor`)
+
+    // Execute the command to open the file
+    sshClient.exec(`${command} "${path}"`, (err, stream) => {
+      if (err) {
+        log("error", `Failed to execute system editor command: ${err.message}`)
+        socket.emit("editor:error", { message: "Failed to open file in system editor" })
+        sshClient.end()
+        return
+      }
+
+      let errorOutput = ''
+      stream.stderr.on('data', (data) => {
+        errorOutput += data.toString('utf8')
+      })
+
+      stream.on('close', (code) => {
+        if (code !== 0) {
+          log("error", `System editor command exited with code ${code}: ${errorOutput}`)
+          socket.emit("editor:error", { message: "Failed to open file in system editor" })
+        } else {
+          log("info", `File opened in system editor: ${path}`)
+          socket.emit("editor:opened", { path })
+        }
+        sshClient.end()
+      })
+    })
+  })
+
+  sshClient.on('error', (err) => {
+    log("error", `SSH connection error for system editor: ${err.message}`)
+    socket.emit("editor:error", { message: err.message })
+  })
+
+  // Connect to the SSH server
+  const connectConfig = {
+    host,
+    port: 22, // Default SSH port
+    username,
+    readyTimeout: 30000,
+  }
+
+  // In a real implementation, you would need to handle authentication
+  // This could be via private key or password
+  sshClient.connect(connectConfig)
+}
+
 // Handle database connections
 const handleDatabaseConnection = async (socket, connectionDetails) => {
   const { type, host, port, user, password, database } = connectionDetails
@@ -542,6 +621,11 @@ io.on("connection", (socket) => {
     }
 
     handleDatabaseConnection(socket, connectionDetails)
+  })
+
+  // Add this to the socket.io connection handling section
+  socket.on("editor:open", (fileDetails) => {
+    handleOpenInSystemEditor(socket, fileDetails)
   })
 
   // Handle disconnection
