@@ -1,0 +1,24 @@
+{
+  "name": "ssh-web3-daemon",
+  "version": "1.0.0",
+  "description": "Secure server management daemon for Web3 authentication",
+  "main": "ssh-web3-daemon.js",
+  "bin": {
+    "ssh-web3-daemon": "./ssh-web3-daemon.js"
+  },
+  "scripts": {
+    "start": "node ssh-web3-daemon.js",
+    "start:prod": "node ssh-web3-daemon.js --config=config.json",
+    "install-service": "node install-service.js"
+  },
+  "keywords": ["ssh", "web3", "daemon", "server", "management"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "ethers": "^6.7.1",
+    "mysql2": "^3.6.1",
+    "socket.io": "^4.7.2",
+    "ssh2": "^1.14.0",
+    "yargs": "^17.7.2"
+  }
+}
